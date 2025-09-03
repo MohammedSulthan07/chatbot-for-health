@@ -234,8 +234,6 @@
     });
 
     function setupChatbot() {
-        // IMPORTANT: Replace this with your actual Hugging Face API key.
-        const HF_TOKEN = "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"; 
         const API_URL = "https://router.huggingface.co/v1/chat/completions";
 
         const chatInput = document.getElementById('chat-input');
@@ -255,66 +253,82 @@
             chatHistory.prepend(bubble);
         }
 
-        // Main function to send the message
-        async function sendMessage() {
-            const userMessage = chatInput.value.trim();
-            if (userMessage === '') return;
-
-            // Display user message
-            createChatBubble(userMessage, true);
-            chatInput.value = '';
-
-            try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: {
-                        "Authorization": `Bearer ${HF_TOKEN}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        messages: [{
-                            "role": "system",
-                            "content": "You are a specialized AI-DRIVEN PUBLIC HEALTH CHATBOT FOR DISEASE AWARENESS. Your purpose is strictly limited to providing information on public health and diseases. If a user asks a question that is not directly related to public health or diseases, you must respond *only* with the exact phrase 'Sorry, I cannot answer that question as it is not related to my purpose.' Do not provide any other information or elaboration, even if it is a general knowledge topic. If the question is health-related, provide a helpful and informative response."
-                        }, {
-                            "role": "user",
-                            "content": userMessage
-                        }],
-                        "model": "meta-llama/Llama-3.1-8B-Instruct:cerebras",
-                        "stream": false
-                    })
-                });
-
+        // Fetch the API key from the keys.json file
+        fetch('keys.json')
+            .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
+                return response.json();
+            })
+            .then(data => {
+                const HF_TOKEN = data.api_key;
 
-                const data = await response.json();
-                let botMessage = data.choices[0].message.content;
+                // Main function to send the message
+                async function sendMessage() {
+                    const userMessage = chatInput.value.trim();
+                    if (userMessage === '') return;
 
-                // Add the disclaimer after the bot's message
-                if (botMessage.includes("Sorry, I cannot answer that question")) {
-                    // Do not add the disclaimer to the "sorry" message
-                } else {
-                    botMessage += "\n\nThis is a chatbot for general awareness. Please consult a qualified healthcare professional for medical advice.";
+                    // Display user message
+                    createChatBubble(userMessage, true);
+                    chatInput.value = '';
+
+                    try {
+                        const response = await fetch(API_URL, {
+                            method: 'POST',
+                            headers: {
+                                "Authorization": `Bearer ${HF_TOKEN}`,
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                messages: [{
+                                    "role": "system",
+                                    "content": "You are a specialized AI-DRIVEN PUBLIC HEALTH CHATBOT FOR DISEASE AWARENESS. Your purpose is strictly limited to providing information on public health and diseases. If a user asks a question that is not directly related to public health or diseases, you must respond *only* with the exact phrase 'Sorry, I cannot answer that question as it is not related to my purpose.' Do not provide any other information or elaboration, even if it is a general knowledge topic. If the question is health-related, provide a helpful and informative response."
+                                }, {
+                                    "role": "user",
+                                    "content": userMessage
+                                }],
+                                "model": "meta-llama/Llama-3.1-8B-Instruct:cerebras",
+                                "stream": false
+                            })
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+
+                        const data = await response.json();
+                        let botMessage = data.choices[0].message.content;
+
+                        // Add the disclaimer after the bot's message
+                        if (botMessage.includes("Sorry, I cannot answer that question")) {
+                            // Do not add the disclaimer to the "sorry" message
+                        } else {
+                            botMessage += "\n\nThis is a chatbot for general awareness. Please consult a qualified healthcare professional for medical advice.";
+                        }
+                        
+                        // Display bot message
+                        createChatBubble(botMessage, false);
+
+                    } catch (error) {
+                        console.error('Error:', error);
+                        createChatBubble('Oops, something went wrong. Please try again later.', false);
+                    }
                 }
-                
 
-                // Display bot message
-                createChatBubble(botMessage, false);
-
-            } catch (error) {
-                console.error('Error:', error);
-                createChatBubble('Oops, something went wrong. Please try again later.', false);
-            }
-        }
-
-        // Add event listeners
-        sendButton.addEventListener('click', sendMessage);
-        chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendMessage();
-            }
-        });
+                // Add event listeners only after the API key is successfully fetched
+                sendButton.addEventListener('click', sendMessage);
+                chatInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        sendMessage();
+                    }
+                });
+            })
+            .catch(error => {
+                console.error('Error loading API key:', error);
+                createChatBubble('Oops, failed to load the API key. Please check the keys.json file.', false);
+                sendButton.disabled = true; // Disable the send button if the key fails to load
+            });
     }
 </script>
 
