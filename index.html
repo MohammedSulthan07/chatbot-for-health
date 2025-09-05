@@ -404,39 +404,152 @@
             });
     });
 
-    // --- Shared Helper Functions ---
-    function formatMessage(text) {
-        text = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        text = text.replace(/^### (.*)$/gm, '<strong><u>$1</u></strong><br>');
-        text = text.replace(/^## (.*)$/gm, '<strong><u>$1</u></strong><br>');
-        text = text.replace(/^\d+\.\s(.*)$/gm, '• $1');
-        text = text.replace(/^[•]\s(.*)$/gm, '• $1');
-        text = text.replace(/\\(.?)\\*/g, '<strong>$1</strong>');
-        text = text.replace(/((?:\|.*\|\n)+)/g, (match) => {
-            const rows = match.trim().split("\n").map(row => {
-                const cells = row.split("|").slice(1, -1).map(cell => cell.trim());
-                if (/^---/.test(cells[0])) return null;
-                return cells;
-            }).filter(Boolean);
-
-            if (!rows.length) return match;
-
-            const headerCells = rows.shift();
-            let table = "<table border='1' cellspacing='0' cellpadding='5' style='border-color: #fff; color: #fff; width: 100%;'><thead><tr>";
-            headerCells.forEach(cell => table += `<th style='border-color: #fff;'>${cell}</th>`);
-            table += "</tr></thead><tbody>";
-            rows.forEach(row => {
-                table += "<tr>";
-                row.forEach(cell => table += `<td style='border-color: #fff;'>${cell}</td>`);
-                table += "</tr>";
-            });
-            table += "</tbody></table>";
-            return table;
-        });
-        text = text.replace(/\n\n/g, '<br><br>');
-        text = text.replace(/\n/g, '<br>');
-        return text;
+    // --- Markdown Formatting Functions ---
+    // Simple safe-HTML escape
+    function escapeHtml(s){
+        return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
     }
+
+    // Convert inline markdown-ish formatting
+    function inlineFormat(s){
+        // code: `code`
+        s = s.replace(/`([^`]+)`/g, (m, p1) => '<code>' + escapeHtml(p1) + '</code>');
+        // bold **text**
+        s = s.replace(/\*\*([^\*]+)\*\*/g, (m,p1)=> '<strong>' + escapeHtml(p1) + '</strong>');
+        // italic *text* (avoid catching bold)
+        s = s.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (m,p1)=> '<em>' + escapeHtml(p1) + '</em>');
+        // links [text](url)
+        s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m,p1,p2) => {
+            const text = escapeHtml(p1);
+            const url = escapeHtml(p2);
+            return '<a href="'+ url +'" target="_blank" rel="noopener noreferrer">'+ text +'</a>';
+        });
+        return s;
+    }
+
+    // Detect table block (lines containing | ) and render HTML table
+    function parseTableBlock(lines){
+        // lines: array of strings (unescaped)
+        const rows = lines.map(l => {
+            // remove leading/trailing | and split
+            const trimmed = l.trim().replace(/^\|/,'').replace(/\|$/,'');
+            return trimmed.split('|').map(cell => cell.trim());
+        });
+
+        // If second row is a separator of dashes (---), treat as header
+        let header = null;
+        if(rows.length >= 2 && rows[1].every(cell => /^:?-{2,}:?$/.test(cell))){
+            header = rows[0];
+            rows.splice(0,2); // remove header row and separator row
+        }
+
+        let html = '<div style="overflow:auto"><table>';
+        if(header){
+            html += '<thead><tr>' + header.map(h => '<th>' + escapeHtml(h) + '</th>').join('') + '</tr></thead>';
+        }
+        html += '<tbody>';
+        rows.forEach(r => {
+            html += '<tr>' + r.map(c => '<td>' + inlineFormat(escapeHtml(c)) + '</td>').join('') + '</tr>';
+        });
+        html += '</tbody></table></div>';
+        return html;
+    }
+
+    // Main block parser: split by blank lines, detect block types
+    function parseToHtml(raw){
+        if(!raw) return '<p class="muted" style="color:#6b7280">Nothing to preview — paste text in the left pane.</p>';
+        const lines = raw.replaceAll('\\r\\n','\\n').split(/\n/);
+        const blocks = [];
+        let cur = [];
+        // group lines into blocks by blank lines
+        for(let i=0;i<lines.length;i++){
+            const line = lines[i];
+            if(line.trim() === ''){
+                if(cur.length) { blocks.push(cur); cur = []; }
+            } else {
+                cur.push(line);
+            }
+        }
+        if(cur.length) blocks.push(cur);
+
+        const out = blocks.map(block => {
+            // If block looks like a table: most lines contain '|' and at least 1 line has leading/trailing | or pipes count >=1
+            const pipeCount = block.reduce((acc, l) => acc + (l.includes('|') ? 1:0), 0);
+            if(pipeCount >= Math.ceil(block.length / 2) && block.every(l => l.trim().includes('|'))){
+                return parseTableBlock(block);
+            }
+
+            // If block is a single-line heading like ### or ####
+            if(block.length === 1){
+                const line = block[0].trim();
+                // ATX headings: #, ##, ###
+                const m = line.match(/^(#{1,6})\s+(.*)$/);
+                if(m){
+                    const level = m[1].length;
+                    const content = inlineFormat(escapeHtml(m[2]));
+                    return '<h' + level + '>' + content + '</h' + level + '>';
+                }
+                // If line starts with "1. " or "- " or "* " it will be handled below
+            }
+
+            // If block is a list (all lines start with - or * or numeric)
+            const allList = block.every(l => /^\s*([-*]\s+|[0-9]+\.\s+)/.test(l));
+            if(allList){
+                // detect ordered vs unordered:
+                const firstIsOrdered = /^\s*[0-9]+\.\s+/.test(block[0]);
+                if(firstIsOrdered){
+                    const items = block.map(l => l.replace(/^\s*[0-9]+\.\s+/, ''));
+                    return '<ol>' + items.map(it => '<li>' + inlineFormat(escapeHtml(it)) + '</li>').join('') + '</ol>';
+                } else {
+                    const items = block.map(l => l.replace(/^\s*[-*]\s+/, ''));
+                    return '<ul>' + items.map(it => '<li>' + inlineFormat(escapeHtml(it)) + '</li>').join('') + '</ul>';
+                }
+            }
+
+            // Otherwise treat as one or several paragraphs (preserve single-line breaks inside block)
+            // Join lines with spaces when previous line does not end with two spaces
+            const paragraphText = block.map(l => l.trim()).join(' ');
+            return '<p>' + inlineFormat(escapeHtml(paragraphText)) + '</p>';
+        });
+
+        // Post-process: convert occurrences of lines starting with "### 1." or "### 2." etc to H3 lists if user included numbered titles
+        return out.join('\n\n');
+    }
+
+    // --- Shared Helper Functions ---
+    // This is the old formatMessage, replaced by parseToHtml
+    // function formatMessage(text) {
+    //     text = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    //     text = text.replace(/^### (.*)$/gm, '<strong><u>$1</u></strong><br>');
+    //     text = text.replace(/^## (.*)$/gm, '<strong><u>$1</u></strong><br>');
+    //     text = text.replace(/^\d+\.\s(.*)$/gm, '• $1');
+    //     text = text.replace(/^[•]\s(.*)$/gm, '• $1');
+    //     text = text.replace(/\\(.?)\\*/g, '<strong>$1</strong>');
+    //     text = text.replace(/((?:\|.*\|\n)+)/g, (match) => {
+    //         const rows = match.trim().split("\n").map(row => {
+    //             const cells = row.split("|").slice(1, -1).map(cell => cell.trim());
+    //             if (/^---/.test(cells[0])) return null;
+    //             return cells;
+    //         }).filter(Boolean);
+
+    //         if (!rows.length) return match;
+
+    //         const headerCells = rows.shift();
+    //         let table = "<table border='1' cellspacing='0' cellpadding='5' style='border-color: #fff; color: #fff; width: 100%;'><thead><tr>";
+    //         headerCells.forEach(cell => table += `<th style='border-color: #fff;'>${cell}</th>`);
+    //         table += "</tr></thead><tbody>";
+    //         rows.forEach(row => {
+    //             table += "<tr>";
+    //             row.forEach(cell => table += `<td style='border-color: #fff;'>${cell}</td>`);
+    //             table += "</tr>";
+    //         });
+    //         table += "</tbody></table>";
+    //         return table;
+    //     });
+    //     text = text.replace(/\n\n/g, '<br><br>');
+    //     text = text.replace(/\n/g, '<br>');
+    //     return text;
+    // }
 
     function copyToClipboard(text, buttonElement) {
         const textArea = document.createElement("textarea");
@@ -476,7 +589,7 @@
             }
 
             const messageContent = document.createElement('span');
-            messageContent.innerHTML = formatMessage(message);
+            messageContent.innerHTML = parseToHtml(message);
             bubble.appendChild(messageContent);
 
             if (!isUser) {
@@ -589,7 +702,7 @@
             messageDiv.classList.add('speech-message-bubble', sender + '-message');
             
             const contentSpan = document.createElement('span');
-            contentSpan.innerHTML = formatMessage(text);
+            contentSpan.innerHTML = parseToHtml(text);
             messageDiv.appendChild(contentSpan);
 
             if (sender === 'bot') {
