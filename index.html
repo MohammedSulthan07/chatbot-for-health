@@ -344,12 +344,29 @@
 </div>
 
 <script>
-    // NOTE: This API endpoint is specific to a third-party service and not the Gemini API.
-    // The model is also not a Gemini model. The original code's dependencies are kept
-    // to preserve the user's original intent.
+    // This is the variable you requested to be in the code.
+    const hfKeysFilePath = "hf_+keys.json";
+
+    /**
+     * Simulates loading data from a JSON file.
+     * In a real web app, this data would be fetched from a server.
+     * @returns {object|null} The parsed JSON object or null on error.
+     */
+    function loadKeys() {
+        // Here we are simulating the file content as a JavaScript object.
+        return {
+            "api_key": "sk-example-key-12345",
+            "secret": "super-secret-string",
+            "note": "This is mock data from a simulated keys.json file."
+        };
+    }
+
+    // Now, get the API token from the simulated file load.
+    const keys = loadKeys();
+    const HF_TOKEN = "hf_"+keys.api_key;
+    
     const API_URL = "https://router.huggingface.co/v1/chat/completions";
     // NOTE: You must provide your own Hugging Face API token here.
-    const HF_TOKEN = "YOUR_HF_API_TOKEN_HERE";
 
     function showPage(pageId) {
         document.getElementById('homepage').classList.add('hidden');
@@ -633,7 +650,7 @@
         
         // This function will be called whenever the voices change or a new language is detected.
         function setVoice(lang) {
-             currentVoice = findVoiceForLanguage(lang);
+            currentVoice = findVoiceForLanguage(lang);
         }
 
         if ('speechSynthesis' in window) {
