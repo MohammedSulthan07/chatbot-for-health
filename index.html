@@ -193,7 +193,7 @@
         }
 
         .loading-dots span:nth-child(1) { animation-delay: -0.32s; }
-        .loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+        loading-dots span:nth-child(2) { animation-delay: -0.16s; }
         .loading-dots span:nth-child(3) { animation-delay: 0s; }
 
         @keyframes bounce {
@@ -525,7 +525,7 @@
                             "role": "user",
                             "content": userMessage
                         }],
-                        "model": "meta-llama/Llama-3.1-8B-Instruct:cerebras",
+                        "model": "openai/gpt-oss-20b:fireworks-ai",
                         "stream": false
                     })
                 });
@@ -601,7 +601,7 @@
                 messageDiv.appendChild(copyButton);
             }
 
-            speechMessagesDisplay.appendChild(messageDiv);
+            speechMessagesDisplay.prepend(messageDiv);
             speechMessagesDisplay.scrollTop = speechMessagesDisplay.scrollHeight;
         }
 
@@ -615,7 +615,7 @@
                     <span></span>
                 </div>
             `;
-            speechMessagesDisplay.appendChild(thinkingBubble);
+            speechMessagesDisplay.prepend(thinkingBubble);
 
             speechChatHistory.push({ role: "user", content: userInput });
 
@@ -628,7 +628,7 @@
                 const response = await fetch(API_URL, {
                     method: "POST",
                     headers: { "Authorization": `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" },
-                    body: JSON.stringify({ model: "meta-llama/Llama-3.1-8B-Instruct:cerebras", messages: messages, stream: false })
+                    body: JSON.stringify({ model: "openai/gpt-oss-20b:fireworks-ai", messages: messages, stream: false })
                 });
                 
                 speechMessagesDisplay.removeChild(thinkingBubble);
