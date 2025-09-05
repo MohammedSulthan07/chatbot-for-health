@@ -193,7 +193,7 @@
         }
 
         .loading-dots span:nth-child(1) { animation-delay: -0.32s; }
-        .loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+        loading-dots span:nth-child(2) { animation-delay: -0.16s; }
         .loading-dots span:nth-child(3) { animation-delay: 0s; }
 
         @keyframes bounce {
@@ -344,29 +344,7 @@
 </div>
 
 <script>
-    // This is the variable you requested to be in the code.
-    const hfKeysFilePath = "hf_+keys.json";
-
-    /**
-     * Simulates loading data from a JSON file.
-     * In a real web app, this data would be fetched from a server.
-     * @returns {object|null} The parsed JSON object or null on error.
-     */
-    function loadKeys() {
-        // Here we are simulating the file content as a JavaScript object.
-        return {
-            "api_key": "sk-example-key-12345",
-            "secret": "super-secret-string",
-            "note": "This is mock data from a simulated keys.json file."
-        };
-    }
-
-    // Now, get the API token from the simulated file load.
-    const keys = loadKeys();
-    const HF_TOKEN = "hf_"+keys.api_key;
-    
     const API_URL = "https://router.huggingface.co/v1/chat/completions";
-    // NOTE: You must provide your own Hugging Face API token here.
 
     function showPage(pageId) {
         document.getElementById('homepage').classList.add('hidden');
@@ -377,15 +355,53 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         showPage('homepage');
-        setupChatbot();
-        setupSpeechbot();
 
-        // Attach event listeners for page navigation
-        document.getElementById('chat-button').addEventListener('click', () => showPage('chat-page'));
-        document.getElementById('speak-button').addEventListener('click', () => showPage('speak-page'));
-        document.getElementById('chat-back-button').addEventListener('click', () => showPage('homepage'));
-        document.getElementById('chat-home-button').addEventListener('click', () => showPage('homepage'));
-        document.getElementById('speak-back-button').addEventListener('click', () => showPage('homepage'));
+        // Fetch the API key from the keys.json file first
+        fetch('keys.json')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(HTTP error! status: ${response.status});
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Add the "hf_" prefix to the API key
+                const HF_TOKEN = "hf_" + data.api_key;
+                
+                // Now that the token is available, set up the chatbot and speechbot
+                setupChatbot(HF_TOKEN);
+                setupSpeechbot(HF_TOKEN);
+
+                // Attach event listeners for page navigation
+                document.getElementById('chat-button').addEventListener('click', () => showPage('chat-page'));
+                document.getElementById('speak-button').addEventListener('click', () => showPage('speak-page'));
+                document.getElementById('chat-back-button').addEventListener('click', () => showPage('homepage'));
+                document.getElementById('chat-home-button').addEventListener('click', () => showPage('homepage'));
+                document.getElementById('speak-back-button').addEventListener('click', () => showPage('homepage'));
+            })
+            .catch(error => {
+                console.error('Error fetching API key:', error);
+                // Handle the error gracefully, maybe show a message to the user
+                // Using an inline message box instead of alert()
+                const errorMessage = document.createElement('div');
+                errorMessage.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background-color: #ff4d4d;
+                    color: white;
+                    padding: 20px;
+                    border-radius: 10px;
+                    z-index: 1000;
+                    text-align: center;
+                `;
+                errorMessage.textContent = 'Failed to load API key. Please ensure keys.json is present and correctly formatted.';
+                document.body.appendChild(errorMessage);
+                setTimeout(() => {
+                    document.body.removeChild(errorMessage);
+                }, 5000);
+            });
     });
 
     // --- Markdown Formatting Functions ---
@@ -396,12 +412,12 @@
 
     // Convert inline markdown-ish formatting
     function inlineFormat(s){
-        // code: `code`
-        s = s.replace(/`([^`]+)`/g, (m, p1) => '<code>' + escapeHtml(p1) + '</code>');
-        // bold **text**
-        s = s.replace(/\*\*([^\*]+)\*\*/g, (m,p1)=> '<strong>' + escapeHtml(p1) + '</strong>');
-        // italic *text* (avoid catching bold)
-        s = s.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (m,p1)=> '<em>' + escapeHtml(p1) + '</em>');
+        // code: code
+        s = s.replace(/([^]+)`/g, (m, p1) => '<code>' + escapeHtml(p1) + '</code>');
+        // bold *text*
+        s = s.replace(/\\([^\]+)\\*/g, (m,p1)=> '<strong>' + escapeHtml(p1) + '</strong>');
+        // italic text (avoid catching bold)
+        s = s.replace(/(?<!\)\([^]+)\(?!\*)/g, (m,p1)=> '<em>' + escapeHtml(p1) + '</em>');
         // links [text](url)
         s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m,p1,p2) => {
             const text = escapeHtml(p1);
@@ -501,6 +517,40 @@
     }
 
     // --- Shared Helper Functions ---
+    // This is the old formatMessage, replaced by parseToHtml
+    // function formatMessage(text) {
+    //     text = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    //     text = text.replace(/^### (.*)$/gm, '<strong><u>$1</u></strong><br>');
+    //     text = text.replace(/^## (.*)$/gm, '<strong><u>$1</u></strong><br>');
+    //     text = text.replace(/^\d+\.\s(.*)$/gm, '• $1');
+    //     text = text.replace(/^[•]\s(.*)$/gm, '• $1');
+    //     text = text.replace(/\\(.?)\\*/g, '<strong>$1</strong>');
+    //     text = text.replace(/((?:\|.*\|\n)+)/g, (match) => {
+    //         const rows = match.trim().split("\n").map(row => {
+    //             const cells = row.split("|").slice(1, -1).map(cell => cell.trim());
+    //             if (/^---/.test(cells[0])) return null;
+    //             return cells;
+    //         }).filter(Boolean);
+
+    //         if (!rows.length) return match;
+
+    //         const headerCells = rows.shift();
+    //         let table = "<table border='1' cellspacing='0' cellpadding='5' style='border-color: #fff; color: #fff; width: 100%;'><thead><tr>";
+    //         headerCells.forEach(cell => table += <th style='border-color: #fff;'>${cell}</th>);
+    //         table += "</tr></thead><tbody>";
+    //         rows.forEach(row => {
+    //             table += "<tr>";
+    //             row.forEach(cell => table += <td style='border-color: #fff;'>${cell}</td>);
+    //             table += "</tr>";
+    //         });
+    //         table += "</tbody></table>";
+    //         return table;
+    //     });
+    //     text = text.replace(/\n\n/g, '<br><br>');
+    //     text = text.replace(/\n/g, '<br>');
+    //     return text;
+    // }
+
     function copyToClipboard(text, buttonElement) {
         const textArea = document.createElement("textarea");
         textArea.value = text;
@@ -524,7 +574,7 @@
     }
 
     // --- Chatbot Logic ---
-    function setupChatbot() {
+    function setupChatbot(HF_TOKEN) {
         const chatInput = document.getElementById('chat-input');
         const sendButton = document.getElementById('send-button');
         const chatHistory = document.getElementById('chat-history');
@@ -559,9 +609,6 @@
             const userMessage = chatInput.value.trim();
             if (userMessage === '') return;
 
-            // Get the user's preferred language from the browser
-            const userLanguage = navigator.language || navigator.userLanguage;
-
             createChatBubble(userMessage, true);
             chatInput.value = '';
 
@@ -580,13 +627,13 @@
                 const response = await fetch(API_URL, {
                     method: 'POST',
                     headers: {
-                        "Authorization": `Bearer ${HF_TOKEN}`,
+                        "Authorization": Bearer ${HF_TOKEN},
                         "Content-Type": "application/json"
                     },
                     body: JSON.stringify({
                         messages: [{
                             "role": "system",
-                            "content": `You are a specialized AI-DRIVEN PUBLIC HEALTH CHATBOT FOR DISEASE AWARENESS. Your purpose is strictly limited to providing information on public health and diseases. If a user asks a question that is not directly related to public health or diseases, you must respond *only* with the exact phrase 'Sorry, I cannot answer that question as it is not related to my purpose.' Do not provide any other information or elaboration, even if it is a general knowledge topic. Your response must be in the same language as the user's input. The user's language is: ${userLanguage}. If the question is health-related, provide a helpful and informative response.`
+                            "content": "You are a specialized AI-DRIVEN PUBLIC HEALTH CHATBOT FOR DISEASE AWARENESS. Your purpose is strictly limited to providing information on public health and diseases. If a user asks a question that is not directly related to public health or diseases, you must respond only with the exact phrase 'Sorry, I cannot answer that question as it is not related to my purpose.' Do not provide any other information or elaboration, even if it is a general knowledge topic. If the question is health-related, provide a helpful and informative response."
                         }, {
                             "role": "user",
                             "content": userMessage
@@ -599,14 +646,13 @@
                 chatHistory.removeChild(thinkingBubble);
 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    throw new Error(HTTP error! status: ${response.status});
                 }
 
                 const data = await response.json();
                 let botMessage = data.choices[0].message.content;
 
                 if (botMessage.includes("Sorry, I cannot answer that question")) {
-                    // Do nothing, keep the exact phrase
                 } else {
                     botMessage += "\n\nThis is a chatbot for general awareness. Please consult a qualified healthcare professional for medical advice.";
                 }
@@ -629,7 +675,7 @@
     }
 
     // --- Speech Chat Logic ---
-    function setupSpeechbot() {
+    function setupSpeechbot(HF_TOKEN) {
         const speechStarButton = document.getElementById('speech-star-button');
         const speechMessagesDisplay = document.getElementById('speech-messages-display');
         let speechChatHistory = [];
@@ -637,25 +683,18 @@
         let recognition;
         let currentUtterance = null;
         let botIsSpeaking = false;
-        let currentVoice = null;
-        let lastDetectedLanguage = navigator.language || 'en-US';
+        let femaleVoice = null;
 
-        function findVoiceForLanguage(lang) {
+        function findFemaleVoice() {
             const voices = window.speechSynthesis.getVoices();
-            return voices.find(voice => voice.lang.startsWith(lang)) ||
-                   voices.find(voice => voice.lang.startsWith(lang.split('-')[0])) ||
-                   voices.find(voice => voice.lang === 'en-US') ||
-                   null;
-        }
-        
-        // This function will be called whenever the voices change or a new language is detected.
-        function setVoice(lang) {
-            currentVoice = findVoiceForLanguage(lang);
+            femaleVoice = voices.find(voice => voice.name.toLowerCase().includes('female') && (voice.lang.includes('en-US') || voice.lang.includes('en-GB'))) || 
+                         voices.find(voice => voice.name.toLowerCase().includes('female')) ||
+                         voices.find(voice => voice.name.toLowerCase().includes('zira') || voice.name.toLowerCase().includes('ava'));
         }
 
         if ('speechSynthesis' in window) {
-            window.speechSynthesis.onvoiceschanged = () => setVoice(lastDetectedLanguage);
-            setVoice(lastDetectedLanguage);
+            window.speechSynthesis.onvoiceschanged = findFemaleVoice;
+            findFemaleVoice();
         }
 
         function addSpeechMessage(text, sender) {
@@ -693,23 +732,22 @@
 
             speechChatHistory.push({ role: "user", content: userInput });
 
-            // Pass the user's detected language to the LLM system prompt
             const messages = [{
                 "role": "system",
-                "content": `You are a specialized AI-DRIVEN PUBLIC HEALTH CHATBOT FOR DISEASE AWARENESS. Your purpose is strictly limited to providing information on public health and diseases. If a user asks a question that is not directly related to public health or diseases, you must respond *only* with the exact phrase 'Sorry, I cannot answer that question as it is not related to my purpose.' Do not provide any other information or elaboration, even if it is a general knowledge topic. Your response must be in the same language as the user's input. The user's language is: ${lastDetectedLanguage}. If the question is health-related, provide a helpful and informative response.`
+                "content": "You are a specialized AI-DRIVEN PUBLIC HEALTH CHATBOT FOR DISEASE AWARENESS. Your purpose is strictly limited to providing information on public health and diseases. If a user asks a question that is not directly related to public health or diseases, you must respond only with the exact phrase 'Sorry, I cannot answer that question as it is not related to my purpose.' Do not provide any other information or elaboration, even if it is a general knowledge topic. If the question is health-related, provide a helpful and informative response."
             }, ...speechChatHistory];
 
             try {
                 const response = await fetch(API_URL, {
                     method: "POST",
-                    headers: { "Authorization": `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" },
+                    headers: { "Authorization": Bearer ${HF_TOKEN}, "Content-Type": "application/json" },
                     body: JSON.stringify({ model: "openai/gpt-oss-20b:fireworks-ai", messages: messages, stream: false })
                 });
                 
                 speechMessagesDisplay.removeChild(thinkingBubble);
 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    throw new Error(HTTP error! status: ${response.status});
                 }
 
                 const data = await response.json();
@@ -735,11 +773,8 @@
         function speak(text) {
             if (currentUtterance) window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
-            
-            // Set the language and voice based on the last detected user input language
-            utterance.lang = lastDetectedLanguage;
-            if (currentVoice) utterance.voice = currentVoice;
-
+            utterance.lang = 'en-US';
+            if (femaleVoice) utterance.voice = femaleVoice;
             currentUtterance = utterance;
             utterance.onstart = () => { botIsSpeaking = true; };
             utterance.onend = () => { botIsSpeaking = false; currentUtterance = null; };
@@ -753,23 +788,17 @@
             }
 
             recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-            // Set the recognition language to the user's browser language
-            recognition.lang = navigator.language || 'en-US';
+            recognition.lang = 'en-US';
             recognition.interimResults = false;
             
             recognition.onstart = () => { isListening = true; speechStarButton.classList.add('listening'); };
             recognition.onend = () => { isListening = false; speechStarButton.classList.remove('listening'); };
             recognition.onerror = (event) => {
                 console.error('Speech recognition error:', event.error);
-                addSpeechMessage(`❌ Speech Error: ${event.error}`, "bot");
+                addSpeechMessage(❌ Speech Error: ${event.error}, "bot");
             };
             recognition.onresult = (event) => {
                 const speechResult = event.results[0][0].transcript;
-                // Capture the language from the recognition result to use for the response
-                const detectedLang = event.results[0].lang;
-                lastDetectedLanguage = detectedLang;
-                setVoice(lastDetectedLanguage); // Find a matching voice for the detected language
-
                 if (speechResult) {
                     addSpeechMessage(speechResult, "user");
                     fetchSpeechBotReply(speechResult);
@@ -781,8 +810,8 @@
         speechStarButton.addEventListener('click', () => {
             if (botIsSpeaking) {
                 window.speechSynthesis.cancel();
-            }
-            if (isListening) {
+                botIsSpeaking = false;
+            } else if (isListening) {
                 recognition.stop();
             } else {
                 startSpeechRecognition();
