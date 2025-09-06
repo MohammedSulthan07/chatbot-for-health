@@ -340,7 +340,21 @@
                 margin-top: 2rem;
             }
         }
-    </style>
+    
+.chat-page-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+}
+
+.chat-container {
+    flex-grow: 1;
+    max-height: none;
+    overflow-y: auto;
+}
+
+</style>
 </head>
 <body>
 
@@ -379,8 +393,8 @@
         </div>
     </div>
 
-    <div class="main-content flex-col items-start p-4">
-        <div id="chat-history" class="chat-container flex flex-col-reverse w-full" style="height: 60vh;">
+    <div class="main-content flex-col items-start p-4 chat-page-content">
+        <div id="chat-history" class="chat-container flex flex-col-reverse w-full">
             <div class="chat-bubble bot-bubble">
                 <pre class="whitespace-pre-wrap">HELLO I AM A AI-DRIVEN PUBLIC HEALTH CHATBOT FOR DISEASE AWARENESS</pre>
             </div>
