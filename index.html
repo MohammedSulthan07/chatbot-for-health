@@ -20,7 +20,6 @@
             align-items: center;
             height: 100vh;
             margin: 0;
-            /* FIX: Removed overflow: hidden; to allow scrolling on chat and speak pages */
         }
 
         .container {
@@ -129,8 +128,6 @@
 
         .chat-container {
             width: 100%;
-            display: flex;
-            flex-direction: column;
             height: 100%;
             max-height: 80vh;
             overflow-y: auto;
@@ -139,6 +136,10 @@
         }
         .chat-container::-webkit-scrollbar {
             display: none;
+        }
+        /* Rotates the chat container and messages to allow `prepend` and scrolling to work together */
+        .chat-container.rotated-for-scroll {
+            transform: rotateX(180deg);
         }
 
         .chat-bubble {
@@ -149,6 +150,10 @@
             margin-bottom: 1rem;
             position: relative;
             word-wrap: break-word; /* Ensure text wraps */
+        }
+        /* Rotates the chat bubbles back to be readable */
+        .chat-container.rotated-for-scroll .chat-bubble {
+            transform: rotateX(180deg);
         }
 
         .user-bubble {
@@ -237,6 +242,10 @@
             position: relative;
             max-width: 80%;
             word-wrap: break-word; /* Ensure text wraps */
+        }
+        /* Rotates the speech bubbles back to be readable */
+        .chat-container.rotated-for-scroll .speech-message-bubble {
+            transform: rotateX(180deg);
         }
 
         .speech-message-bubble.user-message {
@@ -391,7 +400,7 @@
     </div>
 
     <div class="main-content flex-col items-start p-4 chat-page-content">
-        <div id="chat-history" class="chat-container flex flex-col-reverse w-full">
+        <div id="chat-history" class="chat-container rotated-for-scroll w-full">
             <div class="chat-bubble bot-bubble">
                 <pre class="whitespace-pre-wrap">HELLO I AM A AI-DRIVEN PUBLIC HEALTH CHATBOT FOR DISEASE AWARENESS</pre>
             </div>
@@ -408,11 +417,11 @@
 <div class="container hidden" id="speak-page">
     <div class="header">
         <div class="header-item">
-            <button id="speak-home-button" class="action-button px-4 py-2 text-xl">Back</button>
+            <button id="speak-back-button" class="action-button px-4 py-2 text-xl">Back</button>
         </div>
     </div>
     <div class="main-content flex-col justify-end items-center">
-        <div id="speech-messages-display" class="chat-container flex flex-col-reverse w-full mb-8" style="flex-grow: 1;">
+        <div id="speech-messages-display" class="chat-container rotated-for-scroll w-full mb-8">
             <div class="speech-message-bubble bot-message">
                 <span>Hello, I am a voice-enabled public health chatbot. How can I help you today?</span>
             </div>
@@ -424,7 +433,6 @@
 </div>
 
 <script>
-    // API URL is a constant and doesn't need template literals
     const API_URL = "https://router.huggingface.co/v1/chat/completions";
 
     function showPage(pageId) {
@@ -437,35 +445,27 @@
     document.addEventListener('DOMContentLoaded', () => {
         showPage('homepage');
 
-        // Fetch the API key from the keys.json file first
         fetch('keys.json')
             .then(response => {
                 if (!response.ok) {
-                    // FIX: Replaced single quotes with backticks for template literal
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 return response.json();
             })
             .then(data => {
-                // The prompt requested not to fix Example 2, which is the token variable creation.
-                // It's technically correct but less conventional.
                 const HF_TOKEN = "hf_" + data.api_key;
                 
-                // Now that the token is available, set up the chatbot and speechbot
                 setupChatbot(HF_TOKEN);
                 setupSpeechbot(HF_TOKEN);
 
-                // Attach event listeners for page navigation
                 document.getElementById('chat-button').addEventListener('click', () => showPage('chat-page'));
                 document.getElementById('speak-button').addEventListener('click', () => showPage('speak-page'));
                 document.getElementById('chat-back-button').addEventListener('click', () => showPage('homepage'));
                 document.getElementById('chat-home-button').addEventListener('click', () => showPage('homepage'));
-                // Changed speak-back-button to speak-home-button for consistency with the new ID in HTML
-                document.getElementById('speak-home-button').addEventListener('click', () => showPage('homepage')); 
+                document.getElementById('speak-back-button').addEventListener('click', () => showPage('homepage')); 
             })
             .catch(error => {
                 console.error('Error fetching API key:', error);
-                // Removed inline CSS for better readability in the warning message
                 const errorMessage = document.createElement('div');
                 errorMessage.style.cssText = `
                     position: fixed;
@@ -487,21 +487,14 @@
             });
     });
 
-    // --- Markdown Formatting Functions ---
-    // Simple safe-HTML escape
     function escapeHtml(s){
         return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
     }
 
-    // Convert inline markdown-ish formatting
     function inlineFormat(s){
-        // FIX: Updated regex for code block to only target backticks
         s = s.replace(/`([^`]+)`/g, (m, p1) => '<code>' + escapeHtml(p1) + '</code>');
-        // FIX: Updated regex for bold (**text** or __text__)
         s = s.replace(/\*\*([^\*]+)\*\*|__([^_]+)__/g, (m, p1, p2) => '<strong>' + escapeHtml(p1 || p2) + '</strong>');
-        // FIX: Updated regex for italic (*text* or _text_) - checks not preceded by an asterisk/underscore
         s = s.replace(/(?<!\*)\*([^\*]+)\*(?!\*)|(?<!\_)\_([^_]+)\_(?!\_)/g, (m, p1, p2) => '<em>' + escapeHtml(p1 || p2) + '</em>');
-        // links [text](url)
         s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m,p1,p2) => {
             const text = escapeHtml(p1);
             const url = escapeHtml(p2);
@@ -510,20 +503,16 @@
         return s;
     }
 
-    // Detect table block (lines containing | ) and render HTML table
     function parseTableBlock(lines){
-        // lines: array of strings (unescaped)
         const rows = lines.map(l => {
-            // remove leading/trailing | and split
             const trimmed = l.trim().replace(/^\|/,'').replace(/\|$/,'');
             return trimmed.split('|').map(cell => cell.trim());
         });
 
-        // If second row is a separator of dashes (---), treat as header
         let header = null;
         if(rows.length >= 2 && rows[1].every(cell => /^:?-{2,}:?$/.test(cell))){
             header = rows[0];
-            rows.splice(0,2); // remove header row and separator row
+            rows.splice(0,2);
         }
 
         let html = '<div style="overflow:auto"><table>';
@@ -538,14 +527,11 @@
         return html;
     }
 
-    // Main block parser: split by blank lines, detect block types
     function parseToHtml(raw){
         if(!raw) return '<p class="muted" style="color:#6b7280">Nothing to preview — paste text in the left pane.</p>';
-        // FIX: Corrected regex for newline replacement
         const lines = raw.replaceAll('\r\n','\n').split(/\n/);
         const blocks = [];
         let cur = [];
-        // group lines into blocks by blank lines
         for(let i=0;i<lines.length;i++){
             const line = lines[i];
             if(line.trim() === ''){
@@ -557,29 +543,23 @@
         if(cur.length) blocks.push(cur);
 
         const out = blocks.map(block => {
-            // If block looks like a table: most lines contain '|' and at least 1 line has leading/trailing | or pipes count >=1
             const pipeCount = block.reduce((acc, l) => acc + (l.includes('|') ? 1:0), 0);
             if(pipeCount >= Math.ceil(block.length / 2) && block.every(l => l.trim().includes('|'))){
                 return parseTableBlock(block);
             }
 
-            // If block is a single-line heading like ### or ####
             if(block.length === 1){
                 const line = block[0].trim();
-                // ATX headings: #, ##, ###
                 const m = line.match(/^(#{1,6})\s+(.*)$/);
                 if(m){
                     const level = m[1].length;
                     const content = inlineFormat(escapeHtml(m[2]));
                     return '<h' + level + '>' + content + '</h' + level + '>';
                 }
-                // If line starts with "1. " or "- " or "* " it will be handled below
             }
 
-            // If block is a list (all lines start with - or * or numeric)
             const allList = block.every(l => /^\s*([-*]\s+|[0-9]+\.\s+)/.test(l));
             if(allList){
-                // detect ordered vs unordered:
                 const firstIsOrdered = /^\s*[0-9]+\.\s+/.test(block[0]);
                 if(firstIsOrdered){
                     const items = block.map(l => l.replace(/^\s*[0-9]+\.\s+/, ''));
@@ -590,18 +570,12 @@
                 }
             }
 
-            // Otherwise treat as one or several paragraphs (preserve single-line breaks inside block)
-            // Join lines with spaces when previous line does not end with two spaces
             const paragraphText = block.map(l => l.trim()).join(' ');
             return '<p>' + inlineFormat(escapeHtml(paragraphText)) + '</p>';
         });
 
-        // Post-process: convert occurrences of lines starting with "### 1." or "### 2." etc to H3 lists if user included numbered titles
         return out.join('\n\n');
     }
-
-    // --- Shared Helper Functions ---
-    // Removed commented-out formatMessage function
 
     function copyToClipboard(text, buttonElement) {
         const textArea = document.createElement("textarea");
@@ -625,7 +599,6 @@
         document.body.removeChild(textArea);
     }
 
-    // --- Chatbot Logic ---
     function setupChatbot(HF_TOKEN) {
         const chatInput = document.getElementById('chat-input');
         const sendButton = document.getElementById('send-button');
@@ -653,10 +626,7 @@
                 bubble.appendChild(copyButton);
             }
 
-            // Using prepend to add the new message to the top of the flex-direction: column-reverse container
             chatHistory.prepend(bubble); 
-            // FIX: Removed this line as the flexbox style handles the scroll view correctly (latest messages appear at the bottom of the visible area)
-            // chatHistory.scrollTop = chatHistory.scrollHeight; 
         }
 
         async function sendMessage() {
@@ -681,7 +651,6 @@
                 const response = await fetch(API_URL, {
                     method: 'POST',
                     headers: {
-                        // FIX: Corrected template literal usage for Authorization header
                         "Authorization": `Bearer ${HF_TOKEN}`, 
                         "Content-Type": "application/json"
                     },
@@ -701,16 +670,13 @@
                 chatHistory.removeChild(thinkingBubble);
 
                 if (!response.ok) {
-                    // FIX: Replaced single quotes with backticks for template literal
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
 
                 const data = await response.json();
                 let botMessage = data.choices[0].message.content;
 
-                // Checking for the exact phrase is sufficient
                 if (!botMessage.includes("Sorry, I cannot answer that question")) {
-                    // FIX: Removed extra newlines, replaced with just one
                     botMessage += "\n\nThis is a chatbot for general awareness. Please consult a qualified healthcare professional for medical advice.";
                 }
                 
@@ -731,7 +697,6 @@
         });
     }
 
-    // --- Speech Chat Logic ---
     function setupSpeechbot(HF_TOKEN) {
         const speechStarButton = document.getElementById('speech-star-button');
         const speechMessagesDisplay = document.getElementById('speech-messages-display');
@@ -770,10 +735,7 @@
                 copyButton.onclick = () => copyToClipboard(text, copyButton);
                 messageDiv.appendChild(copyButton);
             }
-
             speechMessagesDisplay.prepend(messageDiv);
-            // FIX: Removed this line as the flexbox style handles the scroll view correctly
-            // speechMessagesDisplay.scrollTop = speechMessagesDisplay.scrollHeight;
         }
 
         async function fetchSpeechBotReply(userInput) {
@@ -798,7 +760,6 @@
             try {
                 const response = await fetch(API_URL, {
                     method: "POST",
-                    // FIX: Corrected template literal usage for Authorization header
                     headers: { "Authorization": `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" },
                     body: JSON.stringify({ model: "openai/gpt-oss-20b:fireworks-ai", messages: messages, stream: false })
                 });
@@ -806,7 +767,6 @@
                 speechMessagesDisplay.removeChild(thinkingBubble);
 
                 if (!response.ok) {
-                    // FIX: Replaced single quotes with backticks for template literal
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
 
@@ -844,12 +804,11 @@
             utterance.onend = () => {
                 botIsSpeaking = false;
                 if (isListening && !recognition) startListening();
-                else if (isListening) recognition.start(); // Restart listening if it was stopped for speaking
+                else if (isListening) recognition.start();
             };
             window.speechSynthesis.speak(utterance);
         }
 
-        // --- Speech Recognition Logic ---
         if ('webkitSpeechRecognition' in window) {
             recognition = new webkitSpeechRecognition();
             recognition.continuous = false;
@@ -871,7 +830,6 @@
             recognition.onerror = (event) => {
                 console.error('Speech recognition error:', event.error);
                 if (event.error === 'no-speech' || event.error === 'audio-capture') {
-                    // Do nothing, just stop listening and don't show an error
                 } else if (event.error === 'not-allowed') {
                     addSpeechMessage("Permission to use microphone was denied. Please allow microphone access and try again.", 'bot');
                 } else {
@@ -883,13 +841,15 @@
 
             recognition.onend = () => {
                 if (!botIsSpeaking) {
-                    // Only remove listening class if the bot isn't about to speak, or it's a manual end
                     speechStarButton.classList.remove('listening');
                     isListening = false;
                 }
             };
 
             speechStarButton.addEventListener('click', () => {
+                // Stop any ongoing speech when the button is clicked
+                window.speechSynthesis.cancel();
+
                 if (isListening) {
                     recognition.stop();
                 } else {
