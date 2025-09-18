@@ -133,15 +133,13 @@
             overflow-y: auto;
             -ms-overflow-style: none;  /* IE and Edge */
             scrollbar-width: none;  /* Firefox */
+            display: flex;
+            flex-direction: column-reverse; /* Fix for bottom-up scrolling */
         }
         .chat-container::-webkit-scrollbar {
             display: none;
         }
-        /* Rotates the chat container and messages to allow `prepend` and scrolling to work together */
-        .chat-container.rotated-for-scroll {
-            transform: rotateX(180deg);
-        }
-
+        
         .chat-bubble {
             background-color: #1a1a1a;
             color: #fff;
@@ -149,13 +147,9 @@
             border-radius: 1.5rem;
             margin-bottom: 1rem;
             position: relative;
-            word-wrap: break-word; /* Ensure text wraps */
+            word-wrap: break-word;
         }
-        /* Rotates the chat bubbles back to be readable */
-        .chat-container.rotated-for-scroll .chat-bubble {
-            transform: rotateX(180deg);
-        }
-
+        
         .user-bubble {
             background-color: #2c2c2c;
             align-self: flex-end;
@@ -241,13 +235,9 @@
             margin-bottom: 1rem;
             position: relative;
             max-width: 80%;
-            word-wrap: break-word; /* Ensure text wraps */
+            word-wrap: break-word;
         }
-        /* Rotates the speech bubbles back to be readable */
-        .chat-container.rotated-for-scroll .speech-message-bubble {
-            transform: rotateX(180deg);
-        }
-
+        
         .speech-message-bubble.user-message {
             background-color: #2c2c2c;
             align-self: flex-end;
@@ -298,7 +288,7 @@
     }
 
     .header-item.center-text {
-        font-size: 1rem;  /* smaller for mobile */
+        font-size: 1rem;
         padding: 0.5rem 1rem;
         max-width: 90%;
         word-wrap: break-word;
@@ -322,14 +312,14 @@
     }
 
     .action-button {
-        width: 90%;        /* fit screen width */
-        max-width: none;   /* remove desktop limit */
-        font-size: 1.5rem; /* slightly smaller on mobile */
+        width: 90%;
+        max-width: none;
+        font-size: 1.5rem;
         padding: 1rem;
     }
 
     .logo-forhealth {
-        max-width: 70%; /* scale logo */
+        max-width: 70%;
     }
 
     .main-content {
@@ -400,7 +390,7 @@
     </div>
 
     <div class="main-content flex-col items-start p-4 chat-page-content">
-        <div id="chat-history" class="chat-container rotated-for-scroll w-full">
+        <div id="chat-history" class="chat-container w-full">
             <div class="chat-bubble bot-bubble">
                 <pre class="whitespace-pre-wrap">HELLO I AM A AI-DRIVEN PUBLIC HEALTH CHATBOT FOR DISEASE AWARENESS</pre>
             </div>
@@ -421,7 +411,7 @@
         </div>
     </div>
     <div class="main-content flex-col justify-end items-center">
-        <div id="speech-messages-display" class="chat-container rotated-for-scroll w-full mb-8">
+        <div id="speech-messages-display" class="chat-container w-full mb-8">
             <div class="speech-message-bubble bot-message">
                 <span>Hello, I am a voice-enabled public health chatbot. How can I help you today?</span>
             </div>
@@ -445,6 +435,12 @@
     document.addEventListener('DOMContentLoaded', () => {
         showPage('homepage');
 
+        document.getElementById('chat-button').addEventListener('click', () => showPage('chat-page'));
+        document.getElementById('speak-button').addEventListener('click', () => showPage('speak-page'));
+        document.getElementById('chat-back-button').addEventListener('click', () => showPage('homepage'));
+        document.getElementById('chat-home-button').addEventListener('click', () => showPage('homepage'));
+        document.getElementById('speak-back-button').addEventListener('click', () => showPage('homepage'));
+
         fetch('keys.json')
             .then(response => {
                 if (!response.ok) {
@@ -457,12 +453,6 @@
                 
                 setupChatbot(HF_TOKEN);
                 setupSpeechbot(HF_TOKEN);
-
-                document.getElementById('chat-button').addEventListener('click', () => showPage('chat-page'));
-                document.getElementById('speak-button').addEventListener('click', () => showPage('speak-page'));
-                document.getElementById('chat-back-button').addEventListener('click', () => showPage('homepage'));
-                document.getElementById('chat-home-button').addEventListener('click', () => showPage('homepage'));
-                document.getElementById('speak-back-button').addEventListener('click', () => showPage('homepage')); 
             })
             .catch(error => {
                 console.error('Error fetching API key:', error);
@@ -626,7 +616,8 @@
                 bubble.appendChild(copyButton);
             }
 
-            chatHistory.prepend(bubble); 
+            chatHistory.appendChild(bubble);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
         }
 
         async function sendMessage() {
@@ -645,7 +636,7 @@
                     <span></span>
                 </div>
             `;
-            chatHistory.prepend(thinkingBubble);
+            chatHistory.appendChild(thinkingBubble);
 
             try {
                 const response = await fetch(API_URL, {
@@ -703,7 +694,6 @@
         let speechChatHistory = [];
         let isListening = false;
         let recognition;
-        let currentUtterance = null;
         let botIsSpeaking = false;
         let femaleVoice = null;
 
@@ -735,7 +725,8 @@
                 copyButton.onclick = () => copyToClipboard(text, copyButton);
                 messageDiv.appendChild(copyButton);
             }
-            speechMessagesDisplay.prepend(messageDiv);
+            speechMessagesDisplay.appendChild(messageDiv);
+            speechMessagesDisplay.scrollTop = speechMessagesDisplay.scrollHeight;
         }
 
         async function fetchSpeechBotReply(userInput) {
@@ -748,7 +739,7 @@
                     <span></span>
                 </div>
             `;
-            speechMessagesDisplay.prepend(thinkingBubble);
+            speechMessagesDisplay.appendChild(thinkingBubble);
 
             speechChatHistory.push({ role: "user", content: userInput });
 
@@ -791,7 +782,7 @@
         }
         
         function speak(text) {
-            if (currentUtterance) window.speechSynthesis.cancel();
+            window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = 'en-US';
             if (femaleVoice) {
@@ -803,8 +794,7 @@
             };
             utterance.onend = () => {
                 botIsSpeaking = false;
-                if (isListening && !recognition) startListening();
-                else if (isListening) recognition.start();
+                if (isListening) recognition.start();
             };
             window.speechSynthesis.speak(utterance);
         }
@@ -847,7 +837,6 @@
             };
 
             speechStarButton.addEventListener('click', () => {
-                // Stop any ongoing speech when the button is clicked
                 window.speechSynthesis.cancel();
 
                 if (isListening) {
