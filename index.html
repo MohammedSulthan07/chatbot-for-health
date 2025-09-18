@@ -20,7 +20,7 @@
             align-items: center;
             height: 100vh;
             margin: 0;
-            overflow: hidden;
+            /* FIX: Removed overflow: hidden; to allow scrolling on chat and speak pages */
         }
 
         .container {
@@ -322,25 +322,22 @@
     .logo-forhealth {
         max-width: 70%; /* scale logo */
     }
+
+    .main-content {
+        flex-direction: column;
+        padding-top: 8rem;
+        justify-content: flex-start;
+    }
+
+    .left-panel, .right-panel {
+        flex: none;
+        width: 100%;
+    }
+
+    .right-panel {
+        margin-top: 2rem;
+    }
 }
-
-
-            .main-content {
-                flex-direction: column;
-                padding-top: 8rem;
-                justify-content: flex-start;
-            }
-
-            .left-panel, .right-panel {
-                flex: none;
-                width: 100%;
-            }
-
-            .right-panel {
-                margin-top: 2rem;
-            }
-        }
-    
 .chat-page-content {
     display: flex;
     flex-direction: column;
@@ -748,8 +745,8 @@
         function findFemaleVoice() {
             const voices = window.speechSynthesis.getVoices();
             femaleVoice = voices.find(voice => voice.name.toLowerCase().includes('female') && (voice.lang.includes('en-US') || voice.lang.includes('en-GB'))) || 
-                         voices.find(voice => voice.name.toLowerCase().includes('female')) ||
-                         voices.find(voice => voice.name.toLowerCase().includes('zira') || voice.name.toLowerCase().includes('ava'));
+                           voices.find(voice => voice.name.toLowerCase().includes('female')) ||
+                           voices.find(voice => voice.name.toLowerCase().includes('zira') || voice.name.toLowerCase().includes('ava'));
         }
 
         if ('speechSynthesis' in window) {
@@ -837,58 +834,87 @@
             if (currentUtterance) window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = 'en-US';
-            if (femaleVoice) utterance.voice = femaleVoice;
-            currentUtterance = utterance;
-            utterance.onstart = () => { botIsSpeaking = true; };
-            utterance.onend = () => { botIsSpeaking = false; currentUtterance = null; };
+            if (femaleVoice) {
+                utterance.voice = femaleVoice;
+            }
+            utterance.onstart = () => {
+                botIsSpeaking = true;
+                if (isListening) recognition.stop();
+            };
+            utterance.onend = () => {
+                botIsSpeaking = false;
+                if (isListening && !recognition) startListening();
+                else if (isListening) recognition.start(); // Restart listening if it was stopped for speaking
+            };
             window.speechSynthesis.speak(utterance);
         }
 
-        function startSpeechRecognition() {
-            if (!('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
-                addSpeechMessage("Your browser does not support Speech Recognition.", "bot");
-                return;
-            }
-
-            // Check if recognition is already running and stop it before starting a new one
-            if (recognition && isListening) {
-                recognition.stop();
-            }
-
-            recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        // --- Speech Recognition Logic ---
+        if ('webkitSpeechRecognition' in window) {
+            recognition = new webkitSpeechRecognition();
+            recognition.continuous = false;
             recognition.lang = 'en-US';
             recognition.interimResults = false;
-            
-            recognition.onstart = () => { isListening = true; speechStarButton.classList.add('listening'); };
-            recognition.onend = () => { isListening = false; speechStarButton.classList.remove('listening'); };
-            recognition.onerror = (event) => {
-                console.error('Speech recognition error:', event.error);
-                // FIX: Replaced single quotes with backticks for template literal
-                addSpeechMessage(`❌ Speech Error: ${event.error}`, "bot"); 
+
+            recognition.onstart = () => {
+                speechStarButton.classList.add('listening');
             };
+
             recognition.onresult = (event) => {
-                const speechResult = event.results[0][0].transcript;
-                if (speechResult) {
-                    addSpeechMessage(speechResult, "user");
-                    fetchSpeechBotReply(speechResult);
+                const transcript = event.results[0][0].transcript;
+                if (transcript.length > 0) {
+                    addSpeechMessage(transcript, 'user');
+                    fetchSpeechBotReply(transcript);
                 }
             };
-            recognition.start();
-        }
 
-        speechStarButton.addEventListener('click', () => {
-            if (botIsSpeaking) {
-                window.speechSynthesis.cancel();
-                botIsSpeaking = false;
-                currentUtterance = null;
-            } else if (isListening) {
-                recognition.stop();
-            } else {
-                startSpeechRecognition();
+            recognition.onerror = (event) => {
+                console.error('Speech recognition error:', event.error);
+                if (event.error === 'no-speech' || event.error === 'audio-capture') {
+                    // Do nothing, just stop listening and don't show an error
+                } else if (event.error === 'not-allowed') {
+                    addSpeechMessage("Permission to use microphone was denied. Please allow microphone access and try again.", 'bot');
+                } else {
+                    addSpeechMessage("An error occurred. Please try speaking again.", 'bot');
+                }
+                isListening = false;
+                speechStarButton.classList.remove('listening');
+            };
+
+            recognition.onend = () => {
+                if (!botIsSpeaking) {
+                    // Only remove listening class if the bot isn't about to speak, or it's a manual end
+                    speechStarButton.classList.remove('listening');
+                    isListening = false;
+                }
+            };
+
+            speechStarButton.addEventListener('click', () => {
+                if (isListening) {
+                    recognition.stop();
+                } else {
+                    startListening();
+                }
+            });
+
+            function startListening() {
+                if ('webkitSpeechRecognition' in window) {
+                    try {
+                        recognition.start();
+                        isListening = true;
+                    } catch (e) {
+                        console.error("Speech recognition failed to start:", e);
+                        addSpeechMessage("Failed to start speech recognition. Please check your browser settings or try again.", "bot");
+                    }
+                } else {
+                    addSpeechMessage("Your browser does not support Speech Recognition. Please use Google Chrome.", 'bot');
+                }
             }
-        });
+        } else {
+            speechStarButton.style.display = 'none';
+            addSpeechMessage("Your browser does not support Speech Recognition. Please use Google Chrome.", 'bot');
+        }
     }
 </script>
-
 </body>
 </html>
